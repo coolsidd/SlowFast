@@ -196,6 +196,7 @@ def test(cfg):
         writer = None
 
     # # Perform multi-view test on the entire dataset.
+    logger.info("Performing test...".format(len(test_loader)))
     test_meter = perform_test(test_loader, model, test_meter, cfg, writer)
     if writer is not None:
         writer.close()

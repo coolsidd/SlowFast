@@ -51,7 +51,7 @@ class Kinetics(torch.utils.data.Dataset):
         # Only support train, val, and test mode.
         assert mode in [
             "train",
-            "val",
+            "validate",
             "test",
         ], "Split '{}' not supported for Kinetics".format(mode)
         self.mode = mode
@@ -106,7 +106,7 @@ class Kinetics(torch.utils.data.Dataset):
         assert (
             len(self._path_to_videos) > 0
         ), "Failed to load Kinetics split {} from {}".format(
-            self._split_idx, path_to_file
+            self.mode, path_to_file
         )
         logger.info(
             "Constructing kinetics dataloader (size: {}) from {}".format(
