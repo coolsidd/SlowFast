@@ -7,6 +7,7 @@ import numpy as np
 import pprint
 import torch
 from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
+# from apex.parallel.LARC import LARC
 
 import slowfast.models.losses as losses
 import slowfast.models.optimizer as optim
@@ -70,13 +71,20 @@ def train_epoch(
 
         if cfg.DETECTION.ENABLE:
             preds = model(inputs, meta["boxes"])
+        elif cfg.SWAV:
+            preds, embedding = model(inputs)
+            embedding = embedding.detach()
         else:
             preds = model(inputs)
         # Explicitly declare reduction to mean.
         loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
 
         # Compute the loss.
-        loss = loss_fun(preds, labels)
+        if cfg.SWAV:
+            bs = inputs[0].size(0)
+            loss = loss_fun(preds, cfg, bs=bs)
+        else:
+            loss = loss_fun(preds, labels)
 
         # check Nan Loss.
         misc.check_nan_losses(loss)
@@ -384,6 +392,15 @@ def train(cfg):
 
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
+    if cfg.SWAV:
+        optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
+        warmup_lr_schedule = np.linspace(args.start_warmup, args.base_lr, len(train_loader) * args.warmup_epochs)
+        iters = np.arange(len(train_loader) * (args.epochs - args.warmup_epochs))
+        cosine_lr_schedule = np.array([args.final_lr + 0.5 * (args.base_lr - args.final_lr) * (1 + \
+                                                                                               math.cos(math.pi * t / (len(train_loader) * (args.epochs - args.warmup_epochs)))) for t in iters])
+        lr_schedule = np.concatenate((warmup_lr_schedule, cosine_lr_schedule))
+        logger.info("Building swav optimizer done.")
+
 
     # Load a checkpoint to resume training if applicable.
     start_epoch = cu.load_train_checkpoint(cfg, model, optimizer)
@@ -443,7 +460,6 @@ def train(cfg):
 
         # Shuffle the dataset.
         loader.shuffle_dataset(train_loader, cur_epoch)
-
         # Train for one epoch.
         train_epoch(
             train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer

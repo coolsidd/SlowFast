@@ -5,7 +5,7 @@
 from fvcore.common.config import CfgNode
 
 from . import custom_config
-
+import os
 # -----------------------------------------------------------------------------
 # Config definition
 # -----------------------------------------------------------------------------
@@ -405,6 +405,30 @@ _C.DIST_BACKEND = "nccl"
 
 # For SWAV
 _C.SWAV = False
+_C.is_slurm_job = "SLURM_JOB_ID" in os.environ
+
+if _C.is_slurm_job:
+    _C.rank = int(os.environ["SLURM_PROCID"])
+    _C.world_size = int(os.environ["SLURM_NNODES"]) * int(
+        os.environ["SLURM_TASKS_PER_NODE"][0]
+    )
+else:
+    # multi-GPU job (local or multi-node) - jobs started with torch.distributed.launch
+    # read environment variables
+    if "RANK" in os.environ.keys():
+        _C.rank = int(os.environ["RANK"])
+    else:
+        _C.rank = 0
+    if "WORLD_SIZE" in os.environ.keys():
+        _C.world_size = int(os.environ["WORLD_SIZE"])
+    else:
+        _C.world_size = 1
+_C.SWAV_crops_for_assign = [0, 1]
+_C.SWAV_nmb_prototypes = 3000
+_C.SWAV_nmb_crops = [0]
+_C.SWAV_temperature = 0.1
+_C.SWAV_epsilon = 0.05
+_C.SWAV_sinkhorn_iterations = 3
 # ---------------------------------------------------------------------------- #
 # Benchmark options
 # ---------------------------------------------------------------------------- #
