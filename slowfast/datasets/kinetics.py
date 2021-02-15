@@ -51,7 +51,7 @@ class Kinetics(torch.utils.data.Dataset):
         # Only support train, val, and test mode.
         assert mode in [
             "train",
-            "validate",
+            "val",
             "test",
         ], "Split '{}' not supported for Kinetics".format(mode)
         self.mode = mode
