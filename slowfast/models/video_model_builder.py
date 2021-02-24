@@ -665,9 +665,9 @@ class SlowFastSWAV(nn.Module):
         # Prototypes layer for the swav
         self.prototypes = None
         if isinstance(cfg.SWAV_nmb_prototypes, list):
-            self.prototypes = MultiPrototypes(output_dim, cfg.SWAV_nmb_prototypes)
-        elif self.nmb_prototypes > 0:
-            self.prototypes = nn.Linear(output_dim, cfg.SWAV_nmb_prototypes, bias=False)
+            self.prototypes = MultiPrototypes(cfg.SWAV_output_dim, cfg.SWAV_nmb_prototypes)
+        elif cfg.SWAV_nmb_prototypes > 0:
+            self.prototypes = nn.Linear(cfg.SWAV_output_dim, cfg.SWAV_nmb_prototypes, bias=False)
 
 
     def forward(self, x, bboxes=None,training=True):

@@ -8,7 +8,7 @@ import pprint
 import torch
 from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 # from apex.parallel.LARC import LARC
-
+import math
 import slowfast.models.losses as losses
 import slowfast.models.optimizer as optim
 import slowfast.utils.checkpoint as cu
@@ -392,14 +392,6 @@ def train(cfg):
 
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
-    if cfg.SWAV:
-        optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
-        warmup_lr_schedule = np.linspace(args.start_warmup, args.base_lr, len(train_loader) * args.warmup_epochs)
-        iters = np.arange(len(train_loader) * (args.epochs - args.warmup_epochs))
-        cosine_lr_schedule = np.array([args.final_lr + 0.5 * (args.base_lr - args.final_lr) * (1 + \
-                                                                                               math.cos(math.pi * t / (len(train_loader) * (args.epochs - args.warmup_epochs)))) for t in iters])
-        lr_schedule = np.concatenate((warmup_lr_schedule, cosine_lr_schedule))
-        logger.info("Building swav optimizer done.")
 
 
     # Load a checkpoint to resume training if applicable.
@@ -413,6 +405,14 @@ def train(cfg):
         if cfg.BN.USE_PRECISE_STATS
         else None
     )
+    if cfg.SWAV:
+        optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
+        # TODO replace with config equivalents
+        warmup_lr_schedule = np.linspace(0, 4.8, len(train_loader) * 0)
+        iters = np.arange(len(train_loader) * (cfg.SOLVER.MAX_EPOCH))
+        cosine_lr_schedule = np.array([4.8 + 0.5 * (4.8) * (1 + math.cos(math.pi * t / (len(train_loader) * (cfg.SOLVER.MAX_EPOCH)))) for t in iters])
+        lr_schedule = np.concatenate((warmup_lr_schedule, cosine_lr_schedule))
+        logger.info("Building swav optimizer done.")
 
     # Create meters.
     if cfg.DETECTION.ENABLE:

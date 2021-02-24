@@ -425,6 +425,7 @@ else:
         _C.world_size = 1
 _C.SWAV_crops_for_assign = [0, 1]
 _C.SWAV_nmb_prototypes = 3000
+_C.SWAV_output_dim = 3000
 _C.SWAV_nmb_crops = [0]
 _C.SWAV_temperature = 0.1
 _C.SWAV_epsilon = 0.05
