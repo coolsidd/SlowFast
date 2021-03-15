@@ -418,6 +418,8 @@ class MultiPrototypes(nn.Module):
         return out
 
 
+
+
 @MODEL_REGISTRY.register()
 class SlowFastSWAV(nn.Module):
     """
@@ -689,7 +691,7 @@ class SlowFastSWAV(nn.Module):
         elif training:
             y = self.head(x)
             x = self.prototypes(x)
-            return x,y
+            return y,x
         else:
             x = self.head(x)
             return x

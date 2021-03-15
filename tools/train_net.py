@@ -406,7 +406,7 @@ def train(cfg):
         else None
     )
     if cfg.SWAV:
-        optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
+        # optimizer = LARC(optimizer=optimizer, trust_coefficient=0.001, clip=False)
         # TODO replace with config equivalents
         warmup_lr_schedule = np.linspace(0, 4.8, len(train_loader) * 0)
         iters = np.arange(len(train_loader) * (cfg.SOLVER.MAX_EPOCH))

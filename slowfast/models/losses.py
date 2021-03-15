@@ -2,9 +2,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 """Loss functions."""
-
+import torch
 import torch.distributed as dist
 import torch.nn as nn
+import numpy as np
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""
@@ -41,6 +42,8 @@ def distributed_sinkhorn(Q, nmb_iters, cfg):
             Q *= (c / torch.sum(Q, dim=0)).unsqueeze(0)
         return (Q / torch.sum(Q, dim=0, keepdim=True)).t().float()
 
+def swav_loss_wrapper(queue = None, reduction=None):
+    return swav_loss
 
 def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
     loss = 0
@@ -70,14 +73,15 @@ def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
             #     dist.all_reduce(M, op=dist.ReduceOp.MAX)
             #     q -= M
             q = torch.exp(q).t()
-            q = distributed_sinkhorn(q, cfg.SWAV_sinkhorn_iterations)[-bs:]
+            q = distributed_sinkhorn(q, cfg.SWAV_sinkhorn_iterations, cfg)[-bs:]
 
         # cluster assignment prediction
         subloss = 0
-        for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)), crop_id):
-            p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
-            subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
-        loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
+        if cfg.SWAV_nmb_crops > 0:
+            for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)), crop_id):
+                p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
+                subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
+            loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
     loss /= len(cfg.SWAV_crops_for_assign)
     return loss
 

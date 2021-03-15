@@ -189,6 +189,8 @@ class ResNetBasicHead(nn.Module):
             self.act = nn.Softmax(dim=4)
         elif act_func == "sigmoid":
             self.act = nn.Sigmoid()
+        elif act_func == "none":
+            self.act = None
         else:
             raise NotImplementedError(
                 "{} is not supported as an activation"
@@ -212,7 +214,7 @@ class ResNetBasicHead(nn.Module):
         x = self.projection(x)
 
         # Performs fully convlutional inference.
-        if not self.training:
+        if not self.training and self.act is not None:
             x = self.act(x)
             x = x.mean([1, 2, 3])
 
