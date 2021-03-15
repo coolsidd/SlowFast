@@ -43,6 +43,7 @@ def distributed_sinkhorn(Q, nmb_iters, cfg):
         return (Q / torch.sum(Q, dim=0, keepdim=True)).t().float()
 
 def swav_loss_wrapper(queue = None, reduction=None):
+    # TODO crosscheck
     return swav_loss
 
 def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
@@ -50,6 +51,7 @@ def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
     softmax = nn.Softmax(dim=1).cuda()
     print("In swav_loss")
     print(output.shape)
+
     for i, crop_id in enumerate(cfg.SWAV_crops_for_assign):
         with torch.no_grad():
             out = output[bs * crop_id: bs * (crop_id + 1)]
@@ -78,7 +80,7 @@ def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
         # cluster assignment prediction
         subloss = 0
         if cfg.SWAV_nmb_crops > 0:
-            for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)), crop_id):
+            for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)+cfg.SWAV_nmb_frame_views), crop_id):
                 p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
                 subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
             loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
