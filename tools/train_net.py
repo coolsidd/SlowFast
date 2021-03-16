@@ -72,7 +72,7 @@ def train_epoch(
         if cfg.DETECTION.ENABLE:
             preds = model(inputs, meta["boxes"])
         elif cfg.SWAV:
-            preds, embedding = model(inputs)
+            preds, embedding = model(inputs,training=True)
             embedding = embedding.detach()
         else:
             preds = model(inputs)
@@ -459,7 +459,7 @@ def train(cfg):
                 )
 
         # Shuffle the dataset.
-        loader.shuffle_dataset(train_loader, cur_epoch)
+        # loader.shuffle_dataset(train_loader, cur_epoch)
         # Train for one epoch.
         train_epoch(
             train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer

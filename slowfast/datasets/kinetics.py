@@ -65,8 +65,6 @@ class Kinetics(torch.utils.data.Dataset):
         # the frames.
         if self.mode in ["train", "val"]:
             self._num_clips = 1
-            if cfg.SWAV:
-                self._num_clips = sum(cfg.SWAV_nmb_crops) * cfg.SWAV_nmb_frame_views
         elif self.mode in ["test"]:
             self._num_clips = (
                 cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS
@@ -89,7 +87,6 @@ class Kinetics(torch.utils.data.Dataset):
         self._path_to_videos = []
         self._labels = []
         self._spatial_temporal_idx = []
-        self._spatial_sizes = []
         with g_pathmgr.open(path_to_file, "r") as f:
             for clip_idx, path_label in enumerate(f.read().splitlines()):
                 assert (
@@ -106,13 +103,10 @@ class Kinetics(torch.utils.data.Dataset):
                     self._labels.append(int(label))
                     self._spatial_temporal_idx.append(idx)
                     self._video_meta[clip_idx * self._num_clips + idx] = {}
-                    if self.cfg.SWAV:
-                        temp = [[self.cfg.SWAV_size_crops[i]]*self.cfg.SWAV_nmb_crops[i] for i in range(len(self.cfg.SWAV_nmb_crops))]
-                        self._spatial_sizes.extend([i for j in temp for i in j])
         assert (
             len(self._path_to_videos) > 0
         ), "Failed to load Kinetics split {} from {}".format(
-            self.mode, path_to_file
+            self._split_idx, path_to_file
         )
         logger.info(
             "Constructing kinetics dataloader (size: {}) from {}".format(
@@ -142,31 +136,11 @@ class Kinetics(torch.utils.data.Dataset):
 
         if self.mode in ["train", "val"]:
             # -1 indicates random sampling.
-            spatial_sample_index = -1
             temporal_sample_index = -1
+            spatial_sample_index = -1
             min_scale = self.cfg.DATA.TRAIN_JITTER_SCALES[0]
             max_scale = self.cfg.DATA.TRAIN_JITTER_SCALES[1]
             crop_size = self.cfg.DATA.TRAIN_CROP_SIZE
-            if self.cfg.SWAV:
-                temporal_sample_index = (
-                    self._spatial_temporal_idx[index]
-                    // sum(self.cfg.SWAV_nmb_crops)
-                )
-                spatial_sample_index = (
-                    (
-                        self._spatial_temporal_idx[index]
-                        % sum(self.cfg.SWAV_nmb_crops)
-                    )
-                    if self.cfg.SWAV_nmb_frame_views > 1
-                    else 1
-                )
-                min_scale, max_scale, crop_size = (
-                    [self._spatial_sizes[index]] * 3
-                    if sum(self.cfg.SWAV_nmb_crops) > 1
-                    else [self.cfg.DATA.TRAIN_JITTER_SCALES[0]] * 2
-                    + [self.cfg.DATA.TEST_CROP_SIZE]
-                )
-
             if short_cycle_idx in [0, 1]:
                 crop_size = int(
                     round(
@@ -246,8 +220,7 @@ class Kinetics(torch.utils.data.Dataset):
                 continue
 
             # Decode video. Meta info is used to perform selective decoding.
-            if not self.cfg.SWAV:
-                frames = decoder.decode(
+            frames = decoder.decode(
                 video_container,
                 sampling_rate,
                 self.cfg.DATA.NUM_FRAMES,
@@ -258,18 +231,7 @@ class Kinetics(torch.utils.data.Dataset):
                 backend=self.cfg.DATA.DECODING_BACKEND,
                 max_spatial_scale=min_scale,
             )
-            else:
-                frames = decoder.decode(
-                video_container,
-                sampling_rate,
-                self.cfg.DATA.NUM_FRAMES,
-                temporal_sample_index,
-                self.cfg.SWAV_nmb_frame_views,
-                video_meta=self._video_meta[index],
-                target_fps=self.cfg.DATA.TARGET_FPS,
-                backend=self.cfg.DATA.DECODING_BACKEND,
-                max_spatial_scale=min_scale,
-            )
+
             # If decoding failed (wrong format, video is too short, and etc),
             # select another video.
             if frames is None:

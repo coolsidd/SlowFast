@@ -438,11 +438,15 @@ class SlowFastSWAV(nn.Module):
             cfg (CfgNode): model building configs, details are in the
                 comments of the config file.
         """
+        self.temp_crops = cfg.SWAV_nmb_frame_views
+        self.spat_crops_list = cfg.SWAV_nmb_crops
+        self.spat_crops_size = cfg.SWAV_size_crops
         super(SlowFastSWAV, self).__init__()
         self.norm_module = get_norm(cfg)
         self.enable_detection = cfg.DETECTION.ENABLE
         self.num_pathways = 2
         self._construct_network(cfg)
+        
         init_helper.init_weights(
             self, cfg.MODEL.FC_INIT_STD, cfg.RESNET.ZERO_INIT_FINAL_BN
         )
@@ -671,22 +675,22 @@ class SlowFastSWAV(nn.Module):
         elif cfg.SWAV_nmb_prototypes > 0:
             self.prototypes = head_helper.ResNetBasicHead(
                 dim_in=[
-                    width_per_group * 32,
-                    width_per_group * 32 // cfg.SLOWFAST.BETA_INV,
+                    width_per_group * 32 ,
+                    width_per_group * 32 // (cfg.SLOWFAST.BETA_INV),
                 ],
                 num_classes=cfg.SWAV_output_dim,
                 pool_size=[None, None]
                 if cfg.MULTIGRID.SHORT_CYCLE
                 else [
                     [
-                        cfg.DATA.NUM_FRAMES
+                        cfg.DATA.NUM_FRAMES // self.temp_crops
                         // cfg.SLOWFAST.ALPHA
                         // pool_size[0][0],
                         cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[0][1],
                         cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[0][2],
                     ],
                     [
-                        cfg.DATA.NUM_FRAMES // pool_size[1][0],
+                        cfg.DATA.NUM_FRAMES // (pool_size[1][0]*self.temp_crops),
                         cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[1][1],
                         cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[1][2],
                     ],
@@ -712,14 +716,41 @@ class SlowFastSWAV(nn.Module):
         x = self.s5(x)
         return x
 
-    def forward(self, inputs, bboxes=None,training=True):
-        output = self.forward_backbone(inputs)
-        output = torch.tensor(output)
+    def temporal_sampling(self, frames, start_idx, end_idx, num_samples):
+        """
+        Given the start and end frame index, sample num_samples frames between
+        the start and end with equal interval.
+        Args:
+            frames (tensor): a tensor of video frames, dimension is
+                `channel` x `num clip frames` x `height` x `width`.
+            start_idx (int): the index of the start frame.
+            end_idx (int): the index of the end frame.
+            num_samples (int): number of frames to sample.
+        Returns:
+            frames (tersor): a tensor of temporal sampled video frames, dimension is
+                 `channel`x `num clip frames` x `height` x `width`.
+        """
+        # T H W C -> C T H W.
+        index = torch.linspace(start_idx, end_idx, num_samples)
+        index = torch.clamp(index, 0, frames.shape[2] - 1).long().cuda()
+        frames = torch.index_select(frames, 2, index)
+        return frames
+
+    def forward(self, inputs, bboxes=None,training=False):
         if training:
+            for temp_crop in range(self.temp_crops):
+                inputs_samp = [self.temporal_sampling(inputs[i], temp_crop, inputs[i].shape[2]+temp_crop, inputs[i].shape[2]//self.temp_crops) for i in range(2)]
+                _out = self.forward_backbone(inputs_samp)
+                if temp_crop == 0:
+                    output = _out
+                else:
+                    for i in range(2):
+                      output[i] = torch.cat((output[i], _out[i]))
             y = self.prototypes(output)
             x = self.protofinal(y)
             return y,x
         else:
+            output = self.forward_backbone(inputs)
             y = self.head(output)
             return y
 
