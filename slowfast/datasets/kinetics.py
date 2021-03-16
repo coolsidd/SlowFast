@@ -66,7 +66,7 @@ class Kinetics(torch.utils.data.Dataset):
         if self.mode in ["train", "val"]:
             self._num_clips = 1
             if cfg.SWAV:
-                self._num_clips = cfg.SWAV_nmb_crops * cfg.SWAV_nmb_frame_views
+                self._num_clips = sum(cfg.SWAV_nmb_crops) * cfg.SWAV_nmb_frame_views
         elif self.mode in ["test"]:
             self._num_clips = (
                 cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS
@@ -89,6 +89,7 @@ class Kinetics(torch.utils.data.Dataset):
         self._path_to_videos = []
         self._labels = []
         self._spatial_temporal_idx = []
+        self._spatial_sizes = []
         with g_pathmgr.open(path_to_file, "r") as f:
             for clip_idx, path_label in enumerate(f.read().splitlines()):
                 assert (
@@ -105,11 +106,9 @@ class Kinetics(torch.utils.data.Dataset):
                     self._labels.append(int(label))
                     self._spatial_temporal_idx.append(idx)
                     self._video_meta[clip_idx * self._num_clips + idx] = {}
-        if self.cfg.SWAV:
-            self._spatial_sizes = [[self.cfg.SWAV_size_crops[i]]*self.cfg.SWAV_nmb_crops[i] for i in range(len(self.SWAV_nmb_crops))]
-            self._spatial_sizes = [i for j in self._spatial_sizes for i in j]
-        else:
-            self._spatial_sizes = [0]
+                    if self.cfg.SWAV:
+                        temp = [[self.cfg.SWAV_size_crops[i]]*self.cfg.SWAV_nmb_crops[i] for i in range(len(self.cfg.SWAV_nmb_crops))]
+                        self._spatial_sizes.extend([i for j in temp for i in j])
         assert (
             len(self._path_to_videos) > 0
         ), "Failed to load Kinetics split {} from {}".format(

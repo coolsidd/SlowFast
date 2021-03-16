@@ -29,13 +29,13 @@ def distributed_sinkhorn(Q, nmb_iters, cfg):
     with torch.no_grad():
         Q = shoot_infs(Q)
         sum_Q = torch.sum(Q)
-        dist.all_reduce(sum_Q)
+        # dist.all_reduce(sum_Q)
         Q /= sum_Q
         r = torch.ones(Q.shape[0]).cuda(non_blocking=True) / Q.shape[0]
         c = torch.ones(Q.shape[1]).cuda(non_blocking=True) / (cfg.world_size * Q.shape[1])
         for it in range(nmb_iters):
             u = torch.sum(Q, dim=1)
-            dist.all_reduce(u)
+            # dist.all_reduce(u)
             u = r / u
             u = shoot_infs(u)
             Q *= u.unsqueeze(1)
@@ -79,11 +79,10 @@ def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
 
         # cluster assignment prediction
         subloss = 0
-        if cfg.SWAV_nmb_crops > 0:
-            for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)+cfg.SWAV_nmb_frame_views), crop_id):
-                p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
-                subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
-            loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
+        for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)+cfg.SWAV_nmb_frame_views), crop_id):
+            p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
+            subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
+        loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
     loss /= len(cfg.SWAV_crops_for_assign)
     return loss
 
@@ -101,5 +100,5 @@ _LOSSES = {
     "cross_entropy": nn.CrossEntropyLoss,
     "bce": nn.BCELoss,
     "bce_logit": nn.BCEWithLogitsLoss,
-    "swav_loss": swav_loss
+    "swav_loss": swav_loss_wrapper
 }

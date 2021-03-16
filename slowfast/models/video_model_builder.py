@@ -669,42 +669,60 @@ class SlowFastSWAV(nn.Module):
         if isinstance(cfg.SWAV_nmb_prototypes, list):
             self.prototypes = MultiPrototypes(cfg.SWAV_output_dim, cfg.SWAV_nmb_prototypes)
         elif cfg.SWAV_nmb_prototypes > 0:
-            self.prototypes = nn.Linear(cfg.SWAV_output_dim, cfg.SWAV_nmb_prototypes, bias=False)
+            self.prototypes = head_helper.ResNetBasicHead(
+                dim_in=[
+                    width_per_group * 32,
+                    width_per_group * 32 // cfg.SLOWFAST.BETA_INV,
+                ],
+                num_classes=cfg.SWAV_output_dim,
+                pool_size=[None, None]
+                if cfg.MULTIGRID.SHORT_CYCLE
+                else [
+                    [
+                        cfg.DATA.NUM_FRAMES
+                        // cfg.SLOWFAST.ALPHA
+                        // pool_size[0][0],
+                        cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[0][1],
+                        cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[0][2],
+                    ],
+                    [
+                        cfg.DATA.NUM_FRAMES // pool_size[1][0],
+                        cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[1][1],
+                        cfg.DATA.TRAIN_CROP_SIZE // 32 // pool_size[1][2],
+                    ],
+                ],  # None for AdaptiveAvgPool3d((1, 1, 1))
+                dropout_rate=cfg.MODEL.DROPOUT_RATE,
+                act_func=cfg.MODEL.HEAD_ACT,
+            )
+            self.protofinal = nn.Linear(cfg.SWAV_output_dim, cfg.SWAV_nmb_prototypes, bias=False)
 
 
     def forward_backbone(self, x, bboxes=None,training=True):
-            x = self.s1(x)
-            x = self.s1_fuse(x)
-            x = self.s2(x)
-            x = self.s2_fuse(x)
-            for pathway in range(self.num_pathways):
-                pool = getattr(self, "pathway{}_pool".format(pathway))
-                x[pathway] = pool(x[pathway])
-            x = self.s3(x)
-            x = self.s3_fuse(x)
-            x = self.s4(x)
-            x = self.s4_fuse(x)
-            x = self.s5(x)
-            return x
+        x = self.s1(x)
+        x = self.s1_fuse(x)
+        x = self.s2(x)
+        x = self.s2_fuse(x)
+        for pathway in range(self.num_pathways):
+            pool = getattr(self, "pathway{}_pool".format(pathway))
+            x[pathway] = pool(x[pathway])
+        x = self.s3(x)
+        x = self.s3_fuse(x)
+        x = self.s4(x)
+        x = self.s4_fuse(x)
+        x = self.s5(x)
+        return x
 
     def forward(self, inputs, bboxes=None,training=True):
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-        idx_crops = torch.cumsum(torch.unique_consecutive(
-            torch.tensor([inp.shape[-1] for inp in inputs]),
-            return_counts=True,
-        )[1], 0)
-        start_idx = 0
-        for end_idx in idx_crops:
-            _out = self.forward_backbone(torch.cat(inputs[start_idx: end_idx]).cuda(non_blocking=True))
-            if start_idx == 0:
-                output = _out
-            else:
-                output = torch.cat((output, _out))
-            start_idx = end_idx
-        y = self.head(output)
-        x = self.prototypes(output)
-        return y,x
+        output = self.forward_backbone(inputs)
+        output = torch.tensor(output)
+        if training:
+            y = self.prototypes(output)
+            x = self.protofinal(y)
+            return y,x
+        else:
+            y = self.head(output)
+            return y
+
 
 @MODEL_REGISTRY.register()
 class ResNet(nn.Module):
