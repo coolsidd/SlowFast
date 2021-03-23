@@ -746,6 +746,12 @@ class SlowFastSWAV(nn.Module):
                 else:
                     for i in range(2):
                       output[i] = torch.cat((output[i], _out[i]))
+            if cfg.SWAV_shuffle:
+                k = output[0].shape[0]
+                for i in range(k):
+                  for j in range(1, k):
+                    output[0] = torch.cat((output[0],torch.unsqueeze(output[0][i],0)))
+                    output[1] = torch.cat((output[1],torch.unsqueeze(output[1][(i+j)%k],0)))
             y = self.prototypes(output)
             x = self.protofinal(y)
             return y,x

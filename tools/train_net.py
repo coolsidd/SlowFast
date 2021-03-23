@@ -44,7 +44,8 @@ def train_epoch(
     """
     # Enable train mode.
     model.train()
-    train_meter.iter_tic()
+    if not cfg.SWAV:
+        train_meter.iter_tic()
     data_size = len(train_loader)
 
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
@@ -110,7 +111,7 @@ def train_epoch(
                 )
         elif cfg.SWAV:
             loss = loss.item()
-            train_meter.update(loss.item(), inputs[0].size(0))
+            train_meter.update(loss, inputs[0].size(0))
             # batch_time.update(time.time() - end)
         else:
             top1_err, top5_err = None, None
@@ -160,14 +161,13 @@ def train_epoch(
                     },
                     global_step=data_size * cur_epoch + cur_iter,
                 )
-
-        train_meter.iter_toc()  # measure allreduce for this meter
-        train_meter.log_iter_stats(cur_epoch, cur_iter)
-        train_meter.iter_tic()
-
-    # Log epoch stats.
-    train_meter.log_epoch_stats(cur_epoch)
-    train_meter.reset()
+        if not cfg.SWAV:
+            train_meter.iter_toc()  # measure allreduce for this meter
+            train_meter.log_iter_stats(cur_epoch, cur_iter)
+            train_meter.iter_tic()
+            # Log epoch stats.
+            train_meter.log_epoch_stats(cur_epoch)
+            train_meter.reset()
 
 
 @torch.no_grad()
@@ -423,7 +423,7 @@ def train(cfg):
         val_meter = AVAMeter(len(val_loader), cfg, mode="val")
     elif cfg.SWAV:
         # TODO Write custom meter
-        train_meter = AverageMeter()
+        train_meter = SWAVMeter()
         val_meter = ValMeter(len(val_loader), cfg)
     else:
         train_meter = TrainMeter(len(train_loader), cfg)

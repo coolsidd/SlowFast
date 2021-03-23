@@ -432,6 +432,7 @@ _C.SWAV_nmb_frame_views = 4
 _C.SWAV_temperature = 0.1
 _C.SWAV_epsilon = 0.05
 _C.SWAV_sinkhorn_iterations = 3
+_C.SWAV_shuffle = True
 # ---------------------------------------------------------------------------- #
 # Benchmark options
 # ---------------------------------------------------------------------------- #
