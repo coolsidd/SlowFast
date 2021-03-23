@@ -49,8 +49,6 @@ def swav_loss_wrapper(queue = None, reduction=None):
 def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
     loss = 0
     softmax = nn.Softmax(dim=1).cuda()
-    print("In swav_loss")
-    print(output.shape)
 
     for i, crop_id in enumerate(cfg.SWAV_crops_for_assign):
         with torch.no_grad():
@@ -79,7 +77,7 @@ def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
 
         # cluster assignment prediction
         subloss = 0
-        for v in np.delete(np.arange(np.sum(cfg.SWAV_nmb_crops)+cfg.SWAV_nmb_frame_views), crop_id):
+        for v in np.delete(np.arange(cfg.SWAV_nmb_frame_views), crop_id):
             p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
             subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
         loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)

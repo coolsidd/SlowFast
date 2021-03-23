@@ -19,7 +19,7 @@ import slowfast.utils.misc as misc
 import slowfast.visualization.tensorboard_vis as tb
 from slowfast.datasets import loader
 from slowfast.models import build_model
-from slowfast.utils.meters import AVAMeter, TrainMeter, ValMeter
+from slowfast.utils.meters import AVAMeter, TrainMeter, ValMeter, SWAVMeter
 from slowfast.utils.multigrid import MultigridSchedule
 
 logger = logging.get_logger(__name__)
@@ -108,7 +108,10 @@ def train_epoch(
                     {"Train/loss": loss, "Train/lr": lr},
                     global_step=data_size * cur_epoch + cur_iter,
                 )
-
+        elif cfg.SWAV:
+            loss = loss.item()
+            train_meter.update(loss.item(), inputs[0].size(0))
+            # batch_time.update(time.time() - end)
         else:
             top1_err, top5_err = None, None
             if cfg.DATA.MULTI_LABEL:
@@ -418,6 +421,10 @@ def train(cfg):
     if cfg.DETECTION.ENABLE:
         train_meter = AVAMeter(len(train_loader), cfg, mode="train")
         val_meter = AVAMeter(len(val_loader), cfg, mode="val")
+    elif cfg.SWAV:
+        # TODO Write custom meter
+        train_meter = AverageMeter()
+        val_meter = ValMeter(len(val_loader), cfg)
     else:
         train_meter = TrainMeter(len(train_loader), cfg)
         val_meter = ValMeter(len(val_loader), cfg)
