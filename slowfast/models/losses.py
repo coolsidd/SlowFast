@@ -49,38 +49,38 @@ def swav_loss_wrapper(queue = None, reduction=None):
 def swav_loss(output, cfg, bs = None, queue=None, reduction=None):
     loss = 0
     softmax = nn.Softmax(dim=1).cuda()
-
+    num_total_augs = cfg.SWAV_nmb_frame_views
+    if cfg.SWAV_shuffle:
+        num_total_augs = num_total_augs**2
     for i, crop_id in enumerate(cfg.SWAV_crops_for_assign):
         with torch.no_grad():
             out = output[bs * crop_id: bs * (crop_id + 1)]
             # time to use the queue
-            # TODO implement queue
-            # if queue is not None:
-            #     if use_the_queue or not torch.all(queue[i, -1, :] == 0):
-            #         use_the_queue = True
-            #         out = torch.cat((torch.mm(
-            #             queue[i],
-            #             model.module.prototypes.weight.t()
-            #         ), out))
-            #     # fill the queue
-            #     queue[i, bs:] = queue[i, :-bs].clone()
-            #     queue[i, :bs] = embedding[crop_id * bs: (crop_id + 1) * bs]
+            if queue is not None:
+                if use_the_queue or not torch.all(queue[i, -1, :] == 0):
+                    use_the_queue = True
+                    out = torch.cat((torch.mm(
+                        queue[i],
+                        model.module.prototypes.weight.t()
+                    ), out))
+                # fill the queue
+                queue[i, bs:] = queue[i, :-bs].clone()
+                queue[i, :bs] = embedding[crop_id * bs: (crop_id + 1) * bs]
             # get assignments
             q = out / cfg.SWAV_epsilon
-            # TODO improve_numerical_stability
-            # if cfg.improve_numerical_stability:
-            #     M = torch.max(q)
-            #     dist.all_reduce(M, op=dist.ReduceOp.MAX)
-            #     q -= M
+            if cfg.SWAV_improve_numerical_stability:
+                M = torch.max(q)
+                # dist.all_reduce(M, op=dist.ReduceOp.MAX)
+                q -= M
             q = torch.exp(q).t()
             q = distributed_sinkhorn(q, cfg.SWAV_sinkhorn_iterations, cfg)[-bs:]
 
         # cluster assignment prediction
         subloss = 0
-        for v in np.delete(np.arange(cfg.SWAV_nmb_frame_views), crop_id):
+        for v in np.delete(np.arange(num_total_augs), crop_id):
             p = softmax(output[bs * v: bs * (v + 1)] / cfg.SWAV_temperature)
             subloss -= torch.mean(torch.sum(q * torch.log(p), dim=1))
-        loss += subloss / (np.sum(cfg.SWAV_nmb_crops) - 1)
+        loss += subloss / (np.sum(num_total_augs) - 1)
     loss /= len(cfg.SWAV_crops_for_assign)
     return loss
 

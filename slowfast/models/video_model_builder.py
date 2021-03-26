@@ -737,21 +737,22 @@ class SlowFastSWAV(nn.Module):
         return frames
 
     def forward(self, inputs, bboxes=None,training=False):
+        shape_in = inputs[0].shape
         if training:
-            for temp_crop in range(self.temp_crops):
-                inputs_samp = [self.temporal_sampling(inputs[i], temp_crop, inputs[i].shape[2]+temp_crop, inputs[i].shape[2]//self.temp_crops) for i in range(2)]
-                _out = self.forward_backbone(inputs_samp)
-                if temp_crop == 0:
-                    output = _out
-                else:
-                    for i in range(2):
-                      output[i] = torch.cat((output[i], _out[i]))
+            inputs_samp = [inputs[i][:,x:x+shape_in[2]//self.temp_crops] for x in range(self.temp_crops) for i in range(2)]
+            output = self.forward_backbone(inputs_samp)
             if cfg.SWAV_shuffle:
-                k = output[0].shape[0]
-                for i in range(k):
-                  for j in range(1, k):
-                    output[0] = torch.cat((output[0],torch.unsqueeze(output[0][i],0)))
-                    output[1] = torch.cat((output[1],torch.unsqueeze(output[1][(i+j)%k],0)))
+                k = self.temp_crops
+                while (k>=2 and (k%2==0)):
+                    output[0] = torch.cat((output[0], output[0]))
+                    k = k//2
+                for i in range(k-1):
+                    output[0] = torch.cat((output[0], torch.unsqueeze(output[0][:shape_in[0]])))
+                # TODO Vectorize!!
+                for i in range(1, self.temp_crops):
+                    for j in range(shape_in[0]):
+                        for k in range(1+i,self.temp_crops+1+i):
+                            output[1] = torch.cat((output[1],torch.unsqueeze(output[1][j*self.temp_crops+(k%self.temp_crops)],0)))
             y = self.prototypes(output)
             x = self.protofinal(y)
             return y,x
