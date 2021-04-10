@@ -433,6 +433,7 @@ _C.SWAV_temperature = 0.1
 _C.SWAV_epsilon = 0.05
 _C.SWAV_sinkhorn_iterations = 3
 _C.SWAV_shuffle = True
+_C.SWAV_improve_numerical_stability = True
 # ---------------------------------------------------------------------------- #
 # Benchmark options
 # ---------------------------------------------------------------------------- #
