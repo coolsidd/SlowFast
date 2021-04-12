@@ -434,6 +434,7 @@ _C.SWAV_epsilon = 0.05
 _C.SWAV_sinkhorn_iterations = 3
 _C.SWAV_shuffle = True
 _C.SWAV_improve_numerical_stability = True
+_C.SWAV_test_classes = 20
 # ---------------------------------------------------------------------------- #
 # Benchmark options
 # ---------------------------------------------------------------------------- #

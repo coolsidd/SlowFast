@@ -781,15 +781,21 @@ class SWAVTestMeter(TestMeter):
         self,
         num_videos,
         num_clips,
-        num_cls,
+        dim_prototypes,
         overall_iters,
         multi_label=False,
         ensemble_method="sum",
         lin_epochs=1000,
-
+        num_test_classes=20,
     ):
-        super(self).__init__(self,num_videos,num_clips,num_cls,overall_iters,multi_label, ensemble_method)
+        super(SWAVTestMeter, self).__init__(num_videos,num_clips,num_cls,overall_iters,multi_label, ensemble_method)
         self.lin_epochs = lin_epochs
+        self.final_preds = torch.zeros((num_videos, num_test_classes))
+        self.num_test_classes = num_test_classes
+
+    def reset(self):
+        super(SWAVTestMeter, self).reset()
+        self.final_preds = torch.zeros((num_videos, num_test_classes))
 
     def log_iter_stats(self, cur_epoch, cur_iter):
         """
@@ -847,19 +853,19 @@ class SWAVTestMeter(TestMeter):
             logger.info("Running linear model on the computed representations")
             logger.info("Running for {} iterations".self.lin_epochs)
             iter = 0
-            logit_model = LogisticRegression(self.video_preds.shape[-1], 1)
+            logit_model = LogisticRegression(self.video_preds.shape[-1], self.num_test_classes)
             for epoch in range(int(self.lin_epochs)):
                 optimizer.zero_grad()
-                self.video_preds_res = logit_model(self.video_preds.cpu())
+                self.final_preds = logit_model(self.video_preds.cpu())
                 loss = torch.nn.CrossEntropyLoss()(outputs, video_labels)
                 loss.backward()
                 optimizer.step()
                 iter+=1
                 if iter%500==0:
                     # calculate Accuracy
-                    _, predicted = torch.max(self.video_preds.data, 1)
+                    _, self.final_preds = torch.max(self.video_preds.data, 1)
                     total = self.video_preds.size(0)
-                    correct = (predicted == self.video_labels).sum()
+                    correct = (self.final_preds == self.video_labels).sum()
                     accuracy = 100 * correct/total
                     print("Iteration: {}. Loss: {}. Accuracy: {}.".format(iter, loss.item(), accuracy))
 

@@ -759,7 +759,9 @@ class SlowFastSWAV(nn.Module):
             x = self.protofinal(y)
             return y,x
         else:
-            output = self.forward_backbone(inputs)
+            # TODO Change data loader to sample appropriate frames
+            inputs_samp = [inputs[i][:,:,shape_in[i][2]//self.temp_crops:(2)*shape_in[i][2]//self.temp_crops] for i in range(2)]
+            output = self.forward_backbone(inputs_samp)
             output = self.prototypes(output)
             output = self.protofinal(output)
             # y = self.head(output)

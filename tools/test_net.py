@@ -180,10 +180,11 @@ def test(cfg):
             test_loader.dataset.num_videos
             // (cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS),
             cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS,
-            cfg.MODEL.NUM_CLASSES,
+            cfg.SWAV_nmb_prototypes,
             len(test_loader),
             cfg.DATA.MULTI_LABEL,
             cfg.DATA.ENSEMBLE_METHOD,
+            cfg.SWAV_test_classes,
         )
     else:
         assert (
