@@ -7,6 +7,8 @@ import datetime
 import numpy as np
 import os
 from collections import defaultdict, deque
+from datetime import datetime
+from csv import csv
 import torch
 from fvcore.common.timer import Timer
 from sklearn.metrics import average_precision_score
@@ -830,10 +832,22 @@ class SWAVTestMeter(TestMeter):
                 )
 
             self.stats = {"split": "test_final"}
+            timestamp = datetime.now().isoformat()
+            computed_representations_path = "comp_repr_{}.csv".format(timestamp)
+            actual_labels_path = "act_labels_{}.csv".format(timestamp)
+            csv_repr_file = open(computed_representations_path, "w")
+            csv_label_file = open(actual_labels_path, "w")
+            csv_repr_writer = csv.writer(csv_repr_file)
+            csv_label_writer = csv.writer(csv_label_file)
+            csv_repr_writer.write(self.video_preds)
+            csv_label_writer.write(self.video_labels)
+            csv_repr_file.close()
+            csv_label_file.close()
+            logger.info("Saving computed representations to {}", computed_representations_path)
             logger.info("Running linear model on the computed representations")
             logger.info("Running for {} iterations".self.lin_epochs)
             iter = 0
-            logit_model = LogisticRegression(self.video_labels.shape[-1], 1)
+            logit_model = LogisticRegression(self.video_preds.shape[-1], 1)
             for epoch in range(int(self.lin_epochs)):
                 optimizer.zero_grad()
                 self.video_preds_res = logit_model(self.video_preds.cpu())
@@ -848,6 +862,8 @@ class SWAVTestMeter(TestMeter):
                     correct = (predicted == self.video_labels).sum()
                     accuracy = 100 * correct/total
                     print("Iteration: {}. Loss: {}. Accuracy: {}.".format(iter, loss.item(), accuracy))
+
+
             logger.info("Approx Acc of the linear model {}", accuracy)
             self.video_preds = self.video_preds_res
             if self.multi_label:
