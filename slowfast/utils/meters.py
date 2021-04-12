@@ -766,6 +766,111 @@ def get_map(preds, labels):
 
     mean_ap = np.mean(aps)
     return mean_ap
+class LogisticRegression(torch.nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(LogisticRegression, self).__init__()
+        self.linear = torch.nn.Linear(input_dim, output_dim)
+    def forward(self, x):
+        outputs = self.linear(x)
+        return outputs
+
+class SWAVTestMeter(TestMeter):
+    def __init__(
+        self,
+        num_videos,
+        num_clips,
+        num_cls,
+        overall_iters,
+        multi_label=False,
+        ensemble_method="sum",
+        lin_epochs=1000,
+
+    ):
+        super(self).__init__(self,num_videos,num_clips,num_cls,overall_iters,multi_label, ensemble_method)
+        self.lin_epochs = lin_epochs
+
+    def log_iter_stats(self, cur_epoch, cur_iter):
+        """
+        log the stats of the current iteration.
+        Args:
+            cur_epoch (int): the number of current epoch.
+            cur_iter (int): the number of current iteration.
+        """
+        if (cur_iter + 1) % self._cfg.LOG_PERIOD != 0:
+            return
+        eta_sec = self.iter_timer.seconds() * (self.max_iter - cur_iter - 1)
+        eta = str(datetime.timedelta(seconds=int(eta_sec)))
+        stats = {
+            "_type": "val_iter",
+            "epoch": "{}/{}".format(cur_epoch + 1, self._cfg.SOLVER.MAX_EPOCH),
+            "iter": "{}/{}".format(cur_iter + 1, self.max_iter),
+            "time_diff": self.iter_timer.seconds(),
+            "eta": eta,
+            "gpu_mem": "{:.2f}G".format(misc.gpu_mem_usage()),
+        }
+        logging.log_json_stats(stats)
+
+    def finalize_metrics(self, ks=(1, 5)):
+            """
+            Calculate and log the final ensembled metrics.
+            ks (tuple): list of top-k values for topk_accuracies. For example,
+                ks = (1, 5) correspods to top-1 and top-5 accuracy.
+            """
+            if not all(self.clip_count == self.num_clips):
+                logger.warning(
+                    "clip count {} ~= num clips {}".format(
+                        ", ".join(
+                            [
+                                "{}: {}".format(i, k)
+                                for i, k in enumerate(self.clip_count.tolist())
+                            ]
+                        ),
+                        self.num_clips,
+                    )
+                )
+
+            self.stats = {"split": "test_final"}
+            logger.info("Running linear model on the computed representations")
+            logger.info("Running for {} iterations".self.lin_epochs)
+            iter = 0
+            logit_model = LogisticRegression(self.video_labels.shape[-1], 1)
+            for epoch in range(int(self.lin_epochs)):
+                optimizer.zero_grad()
+                self.video_preds_res = logit_model(self.video_preds.cpu())
+                loss = torch.nn.CrossEntropyLoss()(outputs, video_labels)
+                loss.backward()
+                optimizer.step()
+                iter+=1
+                if iter%500==0:
+                    # calculate Accuracy
+                    _, predicted = torch.max(self.video_preds.data, 1)
+                    total = self.video_preds.size(0)
+                    correct = (predicted == self.video_labels).sum()
+                    accuracy = 100 * correct/total
+                    print("Iteration: {}. Loss: {}. Accuracy: {}.".format(iter, loss.item(), accuracy))
+            logger.info("Approx Acc of the linear model {}", accuracy)
+            self.video_preds = self.video_preds_res
+            if self.multi_label:
+                map = get_map(
+                    self.video_preds.cpu().numpy(), self.video_labels.cpu().numpy()
+                )
+                self.stats["map"] = map
+            else:
+                num_topks_correct = metrics.topks_correct(
+                    self.video_preds, self.video_labels, ks
+                )
+                topks = [
+                    (x / self.video_preds.size(0)) * 100.0
+                    for x in num_topks_correct
+                ]
+                assert len({len(ks), len(topks)}) == 1
+                for k, topk in zip(ks, topks):
+                    self.stats["top{}_acc".format(k)] = "{:.{prec}f}".format(
+                        topk, prec=2
+                    )
+            logging.log_json_stats(self.stats)
+
+
 
 class SWAVMeter(object):
     """computes and stores the average and current value"""
