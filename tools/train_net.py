@@ -67,8 +67,8 @@ def train_epoch(
         # Update the learning rate.
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
-
-        train_meter.data_toc()
+        if not cfg.SWAV:
+            train_meter.data_toc()
 
         if cfg.DETECTION.ENABLE:
             preds = model(inputs, meta["boxes"])
@@ -111,6 +111,7 @@ def train_epoch(
                 )
         elif cfg.SWAV:
             loss = loss.item()
+            print("{} Loss is now ".format(loss))
             train_meter.update(loss, inputs[0].size(0))
             # batch_time.update(time.time() - end)
         else:

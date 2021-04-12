@@ -441,6 +441,7 @@ class SlowFastSWAV(nn.Module):
         self.temp_crops = cfg.SWAV_nmb_frame_views
         self.spat_crops_list = cfg.SWAV_nmb_crops
         self.spat_crops_size = cfg.SWAV_size_crops
+        self.shuffle = cfg.SWAV_shuffle
         super(SlowFastSWAV, self).__init__()
         self.norm_module = get_norm(cfg)
         self.enable_detection = cfg.DETECTION.ENABLE
@@ -737,20 +738,21 @@ class SlowFastSWAV(nn.Module):
         return frames
 
     def forward(self, inputs, bboxes=None,training=False):
-        shape_in = inputs[0].shape
+        shape_in = [inputs[i].shape for i in range(2)]
         if training:
-            inputs_samp = [inputs[i][:,x:x+shape_in[2]//self.temp_crops] for x in range(self.temp_crops) for i in range(2)]
+            inputs_samp = [torch.cat([inputs[i][:,:,x*shape_in[i][2]//self.temp_crops:(x+1)*shape_in[i][2]//self.temp_crops] for x in range(self.temp_crops)],dim=0) for i in range(2)]
             output = self.forward_backbone(inputs_samp)
-            if cfg.SWAV_shuffle:
+            output_shape = output[0].shape
+            if self.shuffle:
                 k = self.temp_crops
                 while (k>=2 and (k%2==0)):
                     output[0] = torch.cat((output[0], output[0]))
                     k = k//2
                 for i in range(k-1):
-                    output[0] = torch.cat((output[0], torch.unsqueeze(output[0][:shape_in[0]])))
+                    output[0] = torch.cat((output[0], torch.unsqueeze(output[0][:output_shape[0]])))
                 # TODO Vectorize!!
                 for i in range(1, self.temp_crops):
-                    for j in range(shape_in[0]):
+                    for j in range(shape_in[0][0]):
                         for k in range(1+i,self.temp_crops+1+i):
                             output[1] = torch.cat((output[1],torch.unsqueeze(output[1][j*self.temp_crops+(k%self.temp_crops)],0)))
             y = self.prototypes(output)
@@ -758,8 +760,10 @@ class SlowFastSWAV(nn.Module):
             return y,x
         else:
             output = self.forward_backbone(inputs)
-            y = self.head(output)
-            return y
+            output = self.prototypes(output)
+            output = self.protofinal(output)
+            # y = self.head(output)
+            return output
 
 
 @MODEL_REGISTRY.register()

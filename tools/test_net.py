@@ -16,7 +16,7 @@ import slowfast.utils.misc as misc
 import slowfast.visualization.tensorboard_vis as tb
 from slowfast.datasets import loader
 from slowfast.models import build_model
-from slowfast.utils.meters import AVAMeter, TestMeter
+from slowfast.utils.meters import AVAMeter, TestMeter, SWAVTestMeter
 
 logger = logging.get_logger(__name__)
 
@@ -45,7 +45,6 @@ def perform_test(test_loader, model, test_meter, cfg, writer=None):
     # Enable eval mode.
     model.eval()
     test_meter.iter_tic()
-
     for cur_iter, (inputs, labels, video_idx, meta) in enumerate(test_loader):
         if cfg.NUM_GPUS:
             # Transfer the data to the current GPU device.
@@ -170,6 +169,22 @@ def test(cfg):
     if cfg.DETECTION.ENABLE:
         assert cfg.NUM_GPUS == cfg.TEST.BATCH_SIZE or cfg.NUM_GPUS == 0
         test_meter = AVAMeter(len(test_loader), cfg, mode="test")
+    elif cfg.SWAV:
+        assert (
+            test_loader.dataset.num_videos
+            % (cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS)
+            == 0
+        )
+        # Create meters for multi-view testing.
+        test_meter = SWAVTestMeter(
+            test_loader.dataset.num_videos
+            // (cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS),
+            cfg.TEST.NUM_ENSEMBLE_VIEWS * cfg.TEST.NUM_SPATIAL_CROPS,
+            cfg.MODEL.NUM_CLASSES,
+            len(test_loader),
+            cfg.DATA.MULTI_LABEL,
+            cfg.DATA.ENSEMBLE_METHOD,
+        )
     else:
         assert (
             test_loader.dataset.num_videos
