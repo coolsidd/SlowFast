@@ -29,13 +29,13 @@ def distributed_sinkhorn(Q, nmb_iters, cfg):
     with torch.no_grad():
         Q = shoot_infs(Q)
         sum_Q = torch.sum(Q)
-        # dist.all_reduce(sum_Q)
+        dist.all_reduce(sum_Q)
         Q /= sum_Q
         r = torch.ones(Q.shape[0]).cuda(non_blocking=True) / Q.shape[0]
         c = torch.ones(Q.shape[1]).cuda(non_blocking=True) / (cfg.world_size * Q.shape[1])
         for it in range(nmb_iters):
             u = torch.sum(Q, dim=1)
-            # dist.all_reduce(u)
+            dist.all_reduce(u)
             u = r / u
             u = shoot_infs(u)
             Q *= u.unsqueeze(1)

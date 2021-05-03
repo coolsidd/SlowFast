@@ -91,7 +91,6 @@ def perform_test(test_loader, model, test_meter, cfg, writer=None):
         else:
             # Perform the forward pass.
             preds = model(inputs)
-
             # Gather all the predictions across all the devices to perform ensemble.
             if cfg.NUM_GPUS > 1:
                 preds, labels, video_idx = du.all_gather(

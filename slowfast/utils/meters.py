@@ -7,8 +7,7 @@ import datetime
 import numpy as np
 import os
 from collections import defaultdict, deque
-from datetime import datetime
-from csv import csv
+import csv
 import torch
 from fvcore.common.timer import Timer
 from sklearn.metrics import average_precision_score
@@ -788,35 +787,14 @@ class SWAVTestMeter(TestMeter):
         lin_epochs=1000,
         num_test_classes=20,
     ):
-        super(SWAVTestMeter, self).__init__(num_videos,num_clips,num_cls,overall_iters,multi_label, ensemble_method)
+        super(SWAVTestMeter, self).__init__(num_videos,num_clips,dim_prototypes,overall_iters,multi_label, ensemble_method)
         self.lin_epochs = lin_epochs
         self.final_preds = torch.zeros((num_videos, num_test_classes))
         self.num_test_classes = num_test_classes
 
     def reset(self):
         super(SWAVTestMeter, self).reset()
-        self.final_preds = torch.zeros((num_videos, num_test_classes))
-
-    def log_iter_stats(self, cur_epoch, cur_iter):
-        """
-        log the stats of the current iteration.
-        Args:
-            cur_epoch (int): the number of current epoch.
-            cur_iter (int): the number of current iteration.
-        """
-        if (cur_iter + 1) % self._cfg.LOG_PERIOD != 0:
-            return
-        eta_sec = self.iter_timer.seconds() * (self.max_iter - cur_iter - 1)
-        eta = str(datetime.timedelta(seconds=int(eta_sec)))
-        stats = {
-            "_type": "val_iter",
-            "epoch": "{}/{}".format(cur_epoch + 1, self._cfg.SOLVER.MAX_EPOCH),
-            "iter": "{}/{}".format(cur_iter + 1, self.max_iter),
-            "time_diff": self.iter_timer.seconds(),
-            "eta": eta,
-            "gpu_mem": "{:.2f}G".format(misc.gpu_mem_usage()),
-        }
-        logging.log_json_stats(stats)
+        self.final_preds.zero_()
 
     def finalize_metrics(self, ks=(1, 5)):
             """
@@ -838,26 +816,27 @@ class SWAVTestMeter(TestMeter):
                 )
 
             self.stats = {"split": "test_final"}
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.datetime.now().isoformat()
             computed_representations_path = "comp_repr_{}.csv".format(timestamp)
             actual_labels_path = "act_labels_{}.csv".format(timestamp)
             csv_repr_file = open(computed_representations_path, "w")
             csv_label_file = open(actual_labels_path, "w")
             csv_repr_writer = csv.writer(csv_repr_file)
             csv_label_writer = csv.writer(csv_label_file)
-            csv_repr_writer.write(self.video_preds)
-            csv_label_writer.write(self.video_labels)
+            csv_repr_writer.writerows(self.video_preds.tolist())
+            csv_label_writer.writerows([[self.video_labels.tolist()]])
             csv_repr_file.close()
             csv_label_file.close()
-            logger.info("Saving computed representations to {}", computed_representations_path)
+            logger.info("Saving computed representations to {}".format(computed_representations_path))
             logger.info("Running linear model on the computed representations")
-            logger.info("Running for {} iterations".self.lin_epochs)
+            logger.info("Running for {} iterations".format(self.lin_epochs))
             iter = 0
             logit_model = LogisticRegression(self.video_preds.shape[-1], self.num_test_classes)
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
             for epoch in range(int(self.lin_epochs)):
                 optimizer.zero_grad()
                 self.final_preds = logit_model(self.video_preds.cpu())
-                loss = torch.nn.CrossEntropyLoss()(outputs, video_labels)
+                loss = torch.nn.CrossEntropyLoss()(self.final_preds, self.video_labels)
                 loss.backward()
                 optimizer.step()
                 iter+=1
